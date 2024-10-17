@@ -17,10 +17,9 @@ public static class FileGenerator
         return dictionary;
     }
 
-    public static async Task WriteFile(long totalLineCount)
+    public static async Task WriteFile(string basePath, long totalLineCount)
     {
-        string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        string filePath = Path.Combine(docPath, "TextFile.txt");
+        string filePath = Path.Combine(basePath, "TextFile.txt");
 
         using (StreamWriter outputFile = new StreamWriter(filePath, append: true))
         {

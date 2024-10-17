@@ -1,13 +1,22 @@
-﻿namespace FileGenerator;
+﻿using Microsoft.Extensions.Configuration;
+
+namespace FileGenerator;
 public static class Program
 {
     
-    public static async Task Main(string[] args)
+    public static async Task Main()
     {
         try
         {
+            IConfiguration configuration = new ConfigurationBuilder()
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .Build();
+
+            string basePath = configuration["basePath"];
+            Directory.CreateDirectory(basePath);
+
             long result = PromptForNumber();
-            await  FileGenerator.WriteFile(result);
+            await  FileGenerator.WriteFile(basePath, result);
         }
         catch (Exception ex)
         {

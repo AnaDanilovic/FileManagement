@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+﻿using Microsoft.Extensions.Configuration;
 
 namespace FileSorter;
 
@@ -6,26 +6,25 @@ public static class Program
 {
     const long MaxMemorySize = 100 * 1024 * 1024; // 100MB chunks
 
-    //const long MaxMemorySize = 100;
-
-    public static async Task Main(string[] args)
+    public static async Task Main()
     {
         try
         {
-            Stopwatch sw = Stopwatch.StartNew();
+            IConfiguration configuration = new ConfigurationBuilder()
+           .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+           .Build();
 
-            string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            string inputFilePath = Path.Combine(docPath, "TextFile.txt");
-            string outputFilePath = Path.Combine(docPath, "SortedTextFile.txt"); ;
-            string tempDir = Path.Combine(docPath, "temp");
+            string basePath = configuration["basePath"];
+            string inputFilePath = Path.Combine(basePath, "TextFile.txt");
+            string outputFilePath = Path.Combine(basePath, "SortedTextFile.txt"); ;
+            string tempDir = Path.Combine(basePath, "temp");
+            Directory.CreateDirectory(tempDir);
 
             List<string> tempFiles = SortFileInChunks(inputFilePath, tempDir);
 
             MergeSortedFiles(tempFiles, outputFilePath);
 
             CleanupTempFiles(tempFiles);
-            sw.Stop();
-            Console.WriteLine($"Time elapsed: {sw.Elapsed}");
         }
         catch (Exception ex)
         {
