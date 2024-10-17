@@ -1,15 +1,19 @@
-﻿namespace FileSorter;
+﻿using System.Diagnostics;
+
+namespace FileSorter;
 
 public static class Program
 {
-    //const long MaxMemorySize = 100 * 1024 * 1024; // 100MB chunks
+    const long MaxMemorySize = 100 * 1024 * 1024; // 100MB chunks
 
-    const long MaxMemorySize = 100;
+    //const long MaxMemorySize = 100;
 
     public static async Task Main(string[] args)
     {
         try
         {
+            Stopwatch sw = Stopwatch.StartNew();
+
             string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             string inputFilePath = Path.Combine(docPath, "TextFile.txt");
             string outputFilePath = Path.Combine(docPath, "SortedTextFile.txt"); ;
@@ -20,6 +24,8 @@ public static class Program
             MergeSortedFiles(tempFiles, outputFilePath);
 
             CleanupTempFiles(tempFiles);
+            sw.Stop();
+            Console.WriteLine($"Time elapsed: {sw.Elapsed}");
         }
         catch (Exception ex)
         {
@@ -54,8 +60,8 @@ public static class Program
 
             if (lines.Count > 0)
             {
-               var sortedChunk = SortChunk(lines);
-               var tempFile = WriteChunk(sortedChunk, tempDir, chunkIndex++);
+                var sortedChunk = SortChunk(lines);
+                var tempFile = WriteChunk(sortedChunk, tempDir, chunkIndex++);
 
                 tempFiles.Add(tempFile);
             }
@@ -68,19 +74,25 @@ public static class Program
     {
         var extractedLines = new (string Original, int Number, string Text)[lines.Count];
 
-        // Parallel parsing for large chunks
-        Parallel.For(0, lines.Count, i =>
+        for (int i = 0; i < lines.Count; i++)
         {
             string line = lines[i];
 
-            int dotIndex = line.IndexOf('.');
-            int number = int.Parse(line.AsSpan(0, dotIndex));
-            string text = line.Substring(dotIndex + 2);
+            try
+            {
+                int dotIndex = line.IndexOf('.');
+                int number = int.Parse(line.AsSpan(0, dotIndex));
+                string text = line.Substring(dotIndex + 2);
 
-            extractedLines[i] = (Original: line, Number: number, Text: text);
-        });
+                extractedLines[i] = (Original: line, Number: number, Text: text);
+            }
+            catch (Exception ex) 
+                {
+                Console.WriteLine(line);
+                throw;
+                }
+        }
 
-        // Sort by text first, then by number
         Array.Sort(extractedLines, (x, y) =>
         {
             int textComparison = string.Compare(x.Text, y.Text, StringComparison.Ordinal);
@@ -90,6 +102,7 @@ public static class Program
 
         return extractedLines.Select(x => x.Original).ToList();
     }
+
 
 
     private static string WriteChunk(List<string> sortedLines, string tempDir, int chunkIndex)
@@ -103,7 +116,7 @@ public static class Program
     private static void MergeSortedFiles(List<string> tempFiles, string outputFilePath)
     {
         var readers = tempFiles.Select(file => new StreamReader(file)).ToList();
-        var sortedDictionary = new SortedDictionary<(string Text, int Number, int Index), StreamReader>();
+        var priorityQueue = new PriorityQueue<(string Text, int Number, int Index), (string Text, int Number)>();
         int index = 0;
 
         foreach (var reader in readers)
@@ -112,50 +125,42 @@ public static class Program
             {
                 string line = reader.ReadLine();
                 var key = ParseLine(line, index);
-                sortedDictionary.Add(key, reader);
+                priorityQueue.Enqueue((line, key.Number, index), (key.Text, key.Number));
                 index++;
             }
         }
 
         using (var writer = new StreamWriter(outputFilePath))
         {
-            index = 0;
-            while (sortedDictionary.Count > 0)
+            while (priorityQueue.Count > 0)
             {
-                var smallest = sortedDictionary.First();
-                sortedDictionary.Remove(smallest.Key);
+                var (line, number, idx) = priorityQueue.Dequeue();
 
-                writer.WriteLine($"{smallest.Key.Number}. {smallest.Key.Text}");
+                writer.WriteLine(line);
 
-                var reader = smallest.Value;
+                var reader = readers[idx];
                 if (!reader.EndOfStream)
                 {
-                    string line = reader.ReadLine();
-                    var key = ParseLine(line, index);
-                    sortedDictionary.Add(key, reader);
-                    index++;
+                    string nextLine = reader.ReadLine();
+                    var nextKey = ParseLine(nextLine, idx);
+                    priorityQueue.Enqueue((nextLine, nextKey.Number, idx), (nextKey.Text, nextKey.Number));
                 }
             }
         }
 
+        // Clean up readers
         foreach (var reader in readers)
         {
             reader.Close();
         }
     }
 
-    private static (string Text, int Number) ParseLine(string line)
+    private static (string Text, int Number) ParseLine(string line, int index)
     {
-        int number = int.Parse(line.Split('.')[0]);
-        string text = line.Substring(line.IndexOf('.') + 2);
+        int dotIndex = line.IndexOf('.');
+        int number = int.Parse(line.AsSpan(0, dotIndex));
+        string text = line.Substring(dotIndex + 2);
         return (text, number);
-    }
-
-    private static (string Text, int Number, int Index) ParseLine(string line, int index)
-    {
-        int number = int.Parse(line.Split('.')[0]);
-        string text = line.Substring(line.IndexOf('.') + 2);
-        return (text, number, index);
     }
 
 
